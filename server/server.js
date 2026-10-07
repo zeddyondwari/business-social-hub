@@ -4,7 +4,9 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
-import { mockState, createId, findUserByEmail, findUserById, resolveAuthor } from './data/mockData.js';
+import fs from 'fs';
+import path from 'path';
+import { mockState, createId } from './data/mockData.js';
 
 dotenv.config();
 
@@ -19,6 +21,40 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const DATA_PATH = path.join(process.cwd(), 'data', 'store.json');
+
+const ensureStore = () => {
+  const dir = path.dirname(DATA_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  if (!fs.existsSync(DATA_PATH)) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(mockState, null, 2));
+  }
+
+  try {
+    const raw = fs.readFileSync(DATA_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch (error) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(mockState, null, 2));
+    return JSON.parse(JSON.stringify(mockState));
+  }
+};
+
+let state = ensureStore();
+
+const saveState = () => {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(state, null, 2));
+};
+
+const getUserByEmail = (email) => state.users.find((user) => user.email.toLowerCase() === String(email).toLowerCase());
+const getUserById = (id) => state.users.find((user) => user.id === id);
+const resolveAuthor = (userId) => {
+  const user = getUserById(userId);
+  if (!user) return null;
+  return { id: user.id, name: user.name, avatar: user.avatar, role: user.role };
+};
 
 app.use(cors());
 app.use(express.json());
@@ -45,9 +81,53 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+app.post('/api/auth/signup', (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: 'Name, email and password are required.' });
+  }
+
+  if (getUserByEmail(email)) {
+    return res.status(409).json({ message: 'User already exists.' });
+  }
+
+  const newUser = {
+    id: createId('u'),
+    name,
+    role: 'member',
+    email,
+    password,
+    followerCount: 0,
+    followingCount: 0,
+    friends: [],
+    bio: 'New to the network.',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80'
+  };
+
+  state.users.unshift(newUser);
+  saveState();
+
+  const token = makeToken(newUser);
+  return res.status(201).json({
+    token,
+    user: {
+      id: newUser.id,
+      name: newUser.name,
+      role: newUser.role,
+      email: newUser.email,
+      bio: newUser.bio,
+      avatar: newUser.avatar,
+      followerCount: newUser.followerCount,
+      followingCount: newUser.followingCount,
+      friends: newUser.friends
+    }
+  });
+});
+
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  const user = findUserByEmail(email);
+  const user = getUserByEmail(email);
 
   if (!user || user.password !== password) {
     return res.status(401).json({ message: 'Invalid email or password' });
@@ -73,11 +153,11 @@ app.post('/api/auth/login', (req, res) => {
 
 app.get('/api/dashboard', authMiddleware, (_req, res) => {
   const summary = {
-    totalUsers: mockState.users.length,
-    activeGroups: mockState.groups.length,
-    openDeals: mockState.products.filter((product) => product.status === 'open' || product.status === 'negotiation').length,
-    alerts: mockState.notifications.filter((n) => !n.read).length,
-    activity: mockState.activity,
+    totalUsers: state.users.length,
+    activeGroups: state.groups.length,
+    openDeals: state.products.filter((product) => product.status === 'open' || product.status === 'negotiation').length,
+    alerts: state.notifications.filter((n) => !n.read).length,
+    activity: state.activity,
     metrics: [
       { label: 'Jumps in joiners', value: '+18.2%' },
       { label: 'Avg. engagement', value: '76%' },
@@ -90,7 +170,7 @@ app.get('/api/dashboard', authMiddleware, (_req, res) => {
 });
 
 app.get('/api/feed', authMiddleware, (_req, res) => {
-  const feed = mockState.posts.map((post) => ({
+  const feed = state.posts.map((post) => ({
     ...post,
     author: resolveAuthor(post.userId)
   }));
@@ -110,14 +190,15 @@ app.post('/api/feed', authMiddleware, (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  mockState.posts.unshift(post);
+  state.posts.unshift(post);
+  saveState();
 
   io.emit('feed:update', { post });
   res.status(201).json(post);
 });
 
 app.get('/api/products', authMiddleware, (_req, res) => {
-  const products = mockState.products.map((product) => ({
+  const products = state.products.map((product) => ({
     ...product,
     seller: resolveAuthor(product.sellerId)
   }));
@@ -139,7 +220,8 @@ app.post('/api/products', authMiddleware, (req, res) => {
     tags: ['new', 'social-trade']
   };
 
-  mockState.products.unshift(product);
+  state.products.unshift(product);
+  saveState();
   io.emit('products:update', { product });
   res.status(201).json(product);
 });
@@ -147,7 +229,7 @@ app.post('/api/products', authMiddleware, (req, res) => {
 app.post('/api/products/:id/negotiate', authMiddleware, (req, res) => {
   const { id } = req.params;
   const { price } = req.body;
-  const product = mockState.products.find((item) => item.id === id);
+  const product = state.products.find((item) => item.id === id);
 
   if (!product) {
     return res.status(404).json({ message: 'Product not found' });
@@ -163,19 +245,20 @@ app.post('/api/products/:id/negotiate', authMiddleware, (req, res) => {
     read: false
   };
 
-  mockState.notifications.unshift(notification);
+  state.notifications.unshift(notification);
+  saveState();
   io.emit('notification:new', { notification });
 
   return res.json(product);
 });
 
 app.get('/api/groups', authMiddleware, (_req, res) => {
-  res.json(mockState.groups);
+  res.json(state.groups);
 });
 
 app.get('/api/groups/:groupId/messages', authMiddleware, (req, res) => {
   const { groupId } = req.params;
-  const messages = mockState.messages
+  const messages = state.messages
     .filter((message) => message.groupId === groupId)
     .map((message) => ({ ...message, sender: resolveAuthor(message.senderId) }));
 
@@ -194,32 +277,33 @@ app.post('/api/groups/:groupId/messages', authMiddleware, (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  mockState.messages.push(message);
+  state.messages.push(message);
+  saveState();
   io.to(groupId).emit('chat:new-message', { ...message, sender: resolveAuthor(req.user.id) });
   res.status(201).json(message);
 });
 
 app.get('/api/notifications', authMiddleware, (_req, res) => {
-  res.json(mockState.notifications);
+  res.json(state.notifications);
 });
 
 app.get('/api/admin/overview', authMiddleware, (_req, res) => {
-  const currentUser = findUserById(req.user.id);
+  const currentUser = getUserById(req.user.id);
   if (!currentUser || !['admin', 'moderator'].includes(currentUser.role)) {
     return res.status(403).json({ message: 'Admin access required' });
   }
 
   return res.json({
     overview: {
-      activeUsers: mockState.users.length,
-      issues: mockState.notifications.length,
-      transactions: mockState.products.length,
+      activeUsers: state.users.length,
+      issues: state.notifications.length,
+      transactions: state.products.length,
       engagement: 87,
       insights: ['More buyers joining from search referrals', 'Pricing debates are increasing in B2B groups', 'Video content sees the largest retention']
     },
-    users: mockState.users,
-    alerts: mockState.notifications,
-    activity: mockState.activity
+    users: state.users,
+    alerts: state.notifications,
+    activity: state.activity
   });
 });
 
@@ -238,7 +322,8 @@ io.on('connection', (socket) => {
       createdAt: new Date().toISOString()
     };
 
-    mockState.messages.push(message);
+    state.messages.push(message);
+    saveState();
     io.to(groupId).emit('chat:new-message', { ...message, sender: resolveAuthor(senderId) });
   });
 });

@@ -22,7 +22,9 @@ const defaultUser = {
 function App() {
   const [token, setToken] = useState('');
   const [user, setUser] = useState(defaultUser);
+  const [mode, setMode] = useState('login');
   const [loginForm, setLoginForm] = useState({ email: 'admin@hub.local', password: 'admin123' });
+  const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '' });
   const [feed, setFeed] = useState([]);
   const [products, setProducts] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -130,6 +132,25 @@ function App() {
     setToken(result.token);
   };
 
+  const createAccount = async (event) => {
+    event.preventDefault();
+    const response = await fetch(`${API}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(signupForm)
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      alert(result.message || 'Signup failed');
+      return;
+    }
+
+    setUser(result.user);
+    setToken(result.token);
+    setMode('login');
+  };
+
   const handleCreatePost = async () => {
     if (!newPost.trim()) return;
 
@@ -168,28 +189,64 @@ function App() {
       <div className="auth-shell">
         <div className="auth-card">
           <div className="badge">Business Social Hub</div>
-          <h1>Business network and marketplace</h1>
+          <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
           <p>Connect, negotiate, trade, and manage communities in real time.</p>
 
-          <form onSubmit={signIn} className="auth-form">
-            <label>
-              Email
-              <input
-                type="email"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-              />
-            </label>
-            <button type="submit">Login</button>
-          </form>
+          {mode === 'login' ? (
+            <form onSubmit={signIn} className="auth-form">
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={loginForm.email}
+                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                />
+              </label>
+              <button type="submit">Login</button>
+            </form>
+          ) : (
+            <form onSubmit={createAccount} className="auth-form">
+              <label>
+                Full name
+                <input
+                  type="text"
+                  value={signupForm.name}
+                  onChange={(e) => setSignupForm({ ...signupForm, name: e.target.value })}
+                />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={signupForm.email}
+                  onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={signupForm.password}
+                  onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                />
+              </label>
+              <button type="submit">Create account</button>
+            </form>
+          )}
+
+          <div className="auth-toggle">
+            <button className="secondary" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
+              {mode === 'login' ? 'Create account' : 'Back to login'}
+            </button>
+          </div>
 
           <div className="demo-accounts">
             <span>Demo accounts:</span>
