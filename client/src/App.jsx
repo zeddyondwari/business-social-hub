@@ -1,436 +1,364 @@
-import { useEffect, useMemo, useState } from 'react';
-import io from 'socket.io-client';
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import jwt from 'jsonwebtoken';
+import { Server } from 'socket.io';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { mockState, createId } from './data/mockData.js';
 
-const API = 'http://localhost:4000';
-const socket = io(API);
+dotenv.config();
 
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0
-  }).format(value || 0);
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
-const defaultUser = {
-  id: 'u1',
-  name: 'Aisha Bello',
-  role: 'admin',
-  email: 'admin@hub.local',
-  avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80'
-};
+const PORT = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const DATA_PATH = path.join(process.cwd(), 'data', 'store.json');
 
-function App() {
-  const [token, setToken] = useState('');
-  const [user, setUser] = useState(defaultUser);
-  const [mode, setMode] = useState('login');
-  const [loginForm, setLoginForm] = useState({ email: 'admin@hub.local', password: 'admin123' });
-  const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '' });
-  const [feed, setFeed] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [dashboard, setDashboard] = useState({ activity: [], metrics: [] });
-  const [notifications, setNotifications] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState('g1');
-  const [messages, setMessages] = useState([]);
-  const [draftMessage, setDraftMessage] = useState('');
-  const [newPost, setNewPost] = useState('');
-
-  const authHeaders = useMemo(
-    () => ({
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }),
-    [token]
-  );
-
-  const loadAll = async () => {
-    if (!token) return;
-
-    const [feedRes, productsRes, groupsRes, dashboardRes, notificationsRes] = await Promise.all([
-      fetch(`${API}/api/feed`, { headers: authHeaders }),
-      fetch(`${API}/api/products`, { headers: authHeaders }),
-      fetch(`${API}/api/groups`, { headers: authHeaders }),
-      fetch(`${API}/api/dashboard`, { headers: authHeaders }),
-      fetch(`${API}/api/notifications`, { headers: authHeaders })
-    ]);
-
-    const feedData = await feedRes.json();
-    const productData = await productsRes.json();
-    const groupsData = await groupsRes.json();
-    const dashboardData = await dashboardRes.json();
-    const notificationsData = await notificationsRes.json();
-
-    setFeed(feedData || []);
-    setProducts(productData || []);
-    setGroups(groupsData || []);
-    setDashboard(dashboardData || { activity: [], metrics: [] });
-    setNotifications(notificationsData || []);
-
-    if (groupsData[0]) {
-      setSelectedGroup(groupsData[0].id);
-    }
-  };
-
-  const loadChat = async (groupId) => {
-    if (!token || !groupId) return;
-    const res = await fetch(`${API}/api/groups/${groupId}/messages`, { headers: authHeaders });
-    const data = await res.json();
-    setMessages(data || []);
-  };
-
-  useEffect(() => {
-    loadAll();
-  }, [token]);
-
-  useEffect(() => {
-    loadChat(selectedGroup);
-    if (selectedGroup) {
-      socket.emit('join-group', selectedGroup);
-    }
-  }, [selectedGroup, token]);
-
-  useEffect(() => {
-    socket.on('chat:new-message', (message) => {
-      setMessages((prev) => [...prev, message]);
-    });
-
-    socket.on('feed:update', ({ post }) => {
-      setFeed((prev) => [post, ...prev]);
-    });
-
-    socket.on('products:update', ({ product }) => {
-      setProducts((prev) => [product, ...prev]);
-    });
-
-    socket.on('notification:new', ({ notification }) => {
-      setNotifications((prev) => [notification, ...prev]);
-    });
-
-    return () => {
-      socket.off('chat:new-message');
-      socket.off('feed:update');
-      socket.off('products:update');
-      socket.off('notification:new');
-    };
-  }, []);
-
-  const signIn = async (event) => {
-    event.preventDefault();
-    const response = await fetch(`${API}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(loginForm)
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      alert(result.message || 'Login failed');
-      return;
-    }
-
-    setUser(result.user);
-    setToken(result.token);
-  };
-
-  const createAccount = async (event) => {
-    event.preventDefault();
-    const response = await fetch(`${API}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(signupForm)
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      alert(result.message || 'Signup failed');
-      return;
-    }
-
-    setUser(result.user);
-    setToken(result.token);
-    setMode('login');
-  };
-
-  const handleCreatePost = async () => {
-    if (!newPost.trim()) return;
-
-    await fetch(`${API}/api/feed`, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ content: newPost, image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80' })
-    });
-    setNewPost('');
-    loadAll();
-  };
-
-  const handleSendMessage = async () => {
-    if (!draftMessage.trim()) return;
-
-    await fetch(`${API}/api/groups/${selectedGroup}/messages`, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ text: draftMessage })
-    });
-    setDraftMessage('');
-    loadChat(selectedGroup);
-  };
-
-  const handleNegotiate = async (productId, price) => {
-    await fetch(`${API}/api/products/${productId}/negotiate`, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ price })
-    });
-    loadAll();
-  };
-
-  if (!token) {
-    return (
-      <div className="auth-shell">
-        <div className="auth-card">
-          <div className="badge">Business Social Hub</div>
-          <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
-          <p>Connect, negotiate, trade, and manage communities in real time.</p>
-
-          {mode === 'login' ? (
-            <form onSubmit={signIn} className="auth-form">
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                />
-              </label>
-              <button type="submit">Login</button>
-            </form>
-          ) : (
-            <form onSubmit={createAccount} className="auth-form">
-              <label>
-                Full name
-                <input
-                  type="text"
-                  value={signupForm.name}
-                  onChange={(e) => setSignupForm({ ...signupForm, name: e.target.value })}
-                />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={signupForm.email}
-                  onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={signupForm.password}
-                  onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
-                />
-              </label>
-              <button type="submit">Create account</button>
-            </form>
-          )}
-
-          <div className="auth-toggle">
-            <button className="secondary" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-              {mode === 'login' ? 'Create account' : 'Back to login'}
-            </button>
-          </div>
-
-          <div className="demo-accounts">
-            <span>Demo accounts:</span>
-            <small>admin@hub.local / admin123</small>
-            <small>mod@hub.local / mod123</small>
-            <small>nia@hub.local / nia123</small>
-          </div>
-        </div>
-      </div>
-    );
+const ensureStore = () => {
+  const dir = path.dirname(DATA_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
   }
 
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <div className="brand">PulseMarket</div>
-          <small>Social commerce operating layer</small>
-        </div>
+  if (!fs.existsSync(DATA_PATH)) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(mockState, null, 2));
+  }
 
-        <nav>
-          <span>Feed</span>
-          <span>Marketplace</span>
-          <span>Groups</span>
-          <span>Admin</span>
-        </nav>
+  try {
+    const raw = fs.readFileSync(DATA_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch (error) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(mockState, null, 2));
+    return JSON.parse(JSON.stringify(mockState));
+  }
+};
 
-        <div className="user-strip">
-          <img src={user.avatar} alt={user.name} />
-          <div>
-            <strong>{user.name}</strong>
-            <small>{user.role}</small>
-          </div>
-        </div>
-      </header>
+let state = ensureStore();
 
-      <main className="content-grid">
-        <section className="main-panel">
-          <div className="panel post-box">
-            <h3>Share a business update</h3>
-            <textarea
-              value={newPost}
-              onChange={(e) => setNewPost(e.target.value)}
-              placeholder="Post product progress, pricing insight, or a sourcing update..."
-            />
-            <div className="actions-row">
-              <button className="secondary">Attach media</button>
-              <button onClick={handleCreatePost}>Publish</button>
-            </div>
-          </div>
+const saveState = () => {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(state, null, 2));
+};
 
-          <div className="feed-list">
-            {feed.map((post) => (
-              <article key={post.id} className="panel feed-item">
-                <div className="feed-head">
-                  <img src={post.author?.avatar || user.avatar} alt={post.author?.name || user.name} />
-                  <div>
-                    <strong>{post.author?.name || 'Unknown user'}</strong>
-                    <small>{new Date(post.createdAt).toLocaleString()}</small>
-                  </div>
-                </div>
-                <p>{post.content}</p>
-                {post.image && <img className="feed-image" src={post.image} alt="post media" />}
-                <div className="meta-row">
-                  <span>♡ {post.likes}</span>
-                  <span>💬 {post.comments}</span>
-                  <span>↗ share</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+const getUserByEmail = (email) => state.users.find((user) => user.email.toLowerCase() === String(email).toLowerCase());
+const getUserById = (id) => state.users.find((user) => user.id === id);
+const resolveAuthor = (userId) => {
+  const user = getUserById(userId);
+  if (!user) return null;
+  return { id: user.id, name: user.name, avatar: user.avatar, role: user.role };
+};
 
-        <aside className="side-panel">
-          <div className="panel stat-panel">
-            <h3>Metrics</h3>
-            {dashboard.metrics.map((item) => (
-              <div key={item.label} className="metric-row">
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-          </div>
+app.use(cors());
+app.use(express.json());
 
-          <div className="panel notifications">
-            <h3>Notifications</h3>
-            {notifications.map((item) => (
-              <div key={item.id} className={`notice ${item.read ? 'read' : ''}`}>
-                {item.message}
-              </div>
-            ))}
-          </div>
-        </aside>
-      </main>
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 
-      <section className="lower-grid">
-        <div className="panel marketplace">
-          <div className="section-head">
-            <h3>Marketplace</h3>
-            <button className="secondary">Add product</button>
-          </div>
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
 
-          <div className="product-list">
-            {products.map((product) => (
-              <div key={product.id} className="product-card">
-                <img src={product.image} alt={product.name} />
-                <div>
-                  <h4>{product.name}</h4>
-                  <p>{product.description}</p>
-                  <div className="price-row">
-                    <strong>{formatCurrency(product.price)}</strong>
-                    <span>{product.status}</span>
-                  </div>
-                  <button onClick={() => handleNegotiate(product.id, Number(product.price) - 150)}>
-                    Counter offer
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+const makeToken = (user) => jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
-        <div className="panel chat-panel">
-          <div className="section-head">
-            <h3>Groups</h3>
-          </div>
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
 
-          <div className="group-tabs">
-            {groups.map((group) => (
-              <button
-                key={group.id}
-                className={selectedGroup === group.id ? 'active' : ''}
-                onClick={() => setSelectedGroup(group.id)}
-              >
-                {group.name}
-              </button>
-            ))}
-          </div>
+app.post('/api/auth/signup', (req, res) => {
+  const { name, email, password } = req.body;
 
-          <div className="chat-window">
-            {messages.map((message) => (
-              <div key={message.id} className="chat-bubble">
-                <strong>{message.sender?.name || 'User'}</strong>
-                <p>{message.text}</p>
-              </div>
-            ))}
-          </div>
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: 'Name, email and password are required.' });
+  }
 
-          <div className="compose-row">
-            <input
-              value={draftMessage}
-              onChange={(e) => setDraftMessage(e.target.value)}
-              placeholder="Write a message..."
-            />
-            <button onClick={handleSendMessage}>Send</button>
-          </div>
-        </div>
-      </section>
+  if (getUserByEmail(email)) {
+    return res.status(409).json({ message: 'User already exists.' });
+  }
 
-      <section className="admin-grid">
-        <div className="panel matrix-panel">
-          <h3>Admin overview</h3>
-          <div className="matrix-grid">
-            {dashboard.activity.map((item) => (
-              <div key={item.id} className="matrix-card">
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
+  const newUser = {
+    id: createId('u'),
+    name,
+    role: 'member',
+    email,
+    password,
+    followerCount: 0,
+    followingCount: 0,
+    friends: [],
+    bio: 'New to the network.',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80'
+  };
 
-        <div className="panel moderator-panel">
-          <h3>Moderation</h3>
-          <ul>
-            <li>Escalated disputes: 7</li>
-            <li>Pending content reviews: 4</li>
-            <li>Group reports: 2</li>
-            <li>Meeting host queue: 1</li>
-          </ul>
-        </div>
-      </section>
-    </div>
-  );
-}
+  state.users.unshift(newUser);
+  saveState();
 
-export default App;
+  const token = makeToken(newUser);
+  return res.status(201).json({
+    token,
+    user: {
+      id: newUser.id,
+      name: newUser.name,
+      role: newUser.role,
+      email: newUser.email,
+      bio: newUser.bio,
+      avatar: newUser.avatar,
+      followerCount: newUser.followerCount,
+      followingCount: newUser.followingCount,
+      friends: newUser.friends
+    }
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  const user = getUserByEmail(email);
+
+  if (!user || user.password !== password) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  const token = makeToken(user);
+
+  return res.json({
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      email: user.email,
+      bio: user.bio,
+      avatar: user.avatar,
+      followerCount: user.followerCount,
+      followingCount: user.followingCount,
+      friends: user.friends
+    }
+  });
+});
+
+app.get('/api/profile', authMiddleware, (req, res) => {
+  const user = getUserById(req.user.id);
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  return res.json({
+    ...user,
+    totalPosts: state.posts.filter((post) => post.userId === user.id).length,
+    totalProducts: state.products.filter((product) => product.sellerId === user.id).length,
+    connectedCount: user.friends.length
+  });
+});
+
+app.get('/api/users', authMiddleware, (_req, res) => {
+  res.json(state.users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    avatar: user.avatar,
+    bio: user.bio,
+    followerCount: user.followerCount,
+    followingCount: user.followingCount,
+    friends: user.friends
+  })));
+});
+
+app.get('/api/dashboard', authMiddleware, (_req, res) => {
+  const summary = {
+    totalUsers: state.users.length,
+    activeGroups: state.groups.length,
+    openDeals: state.products.filter((product) => product.status === 'open' || product.status === 'negotiation').length,
+    alerts: state.notifications.filter((n) => !n.read).length,
+    activity: state.activity,
+    metrics: [
+      { label: 'Jumps in joiners', value: '+18.2%' },
+      { label: 'Avg. engagement', value: '76%' },
+      { label: 'Deals under review', value: '14' },
+      { label: 'Live room traffic', value: '9.4k' }
+    ]
+  };
+
+  res.json(summary);
+});
+
+app.get('/api/feed', authMiddleware, (_req, res) => {
+  const feed = state.posts.map((post) => ({
+    ...post,
+    author: resolveAuthor(post.userId)
+  }));
+
+  res.json(feed);
+});
+
+app.post('/api/feed', authMiddleware, (req, res) => {
+  const { content, image } = req.body;
+  const post = {
+    id: createId('post'),
+    userId: req.user.id,
+    content,
+    image,
+    likes: 0,
+    comments: 0,
+    createdAt: new Date().toISOString()
+  };
+
+  state.posts.unshift(post);
+  saveState();
+
+  io.emit('feed:update', { post });
+  res.status(201).json(post);
+});
+
+app.get('/api/products', authMiddleware, (_req, res) => {
+  const products = state.products.map((product) => ({
+    ...product,
+    seller: resolveAuthor(product.sellerId)
+  }));
+
+  res.json(products);
+});
+
+app.post('/api/products', authMiddleware, (req, res) => {
+  const { name, description, price, image } = req.body;
+  if (!name || !description || !price) {
+    return res.status(400).json({ message: 'Name, description and price are required.' });
+  }
+
+  const product = {
+    id: createId('prod'),
+    name,
+    description,
+    price: Number(price),
+    image: image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1000&q=80',
+    status: 'open',
+    listingType: 'product',
+    sellerId: req.user.id,
+    tags: ['new', 'social-trade']
+  };
+
+  state.products.unshift(product);
+  saveState();
+  io.emit('products:update', { product });
+  res.status(201).json(product);
+});
+
+app.post('/api/products/:id/negotiate', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { price } = req.body;
+  const product = state.products.find((item) => item.id === id);
+
+  if (!product) {
+    return res.status(404).json({ message: 'Product not found' });
+  }
+
+  product.price = Number(price);
+  product.status = 'negotiation';
+
+  const notification = {
+    id: createId('notif'),
+    type: 'challenge',
+    message: `Price negotiation submitted for ${product.name}.`,
+    read: false
+  };
+
+  state.notifications.unshift(notification);
+  saveState();
+  io.emit('notification:new', { notification });
+
+  return res.json(product);
+});
+
+app.get('/api/groups', authMiddleware, (_req, res) => {
+  res.json(state.groups);
+});
+
+app.get('/api/groups/:groupId/messages', authMiddleware, (req, res) => {
+  const { groupId } = req.params;
+  const messages = state.messages
+    .filter((message) => message.groupId === groupId)
+    .map((message) => ({ ...message, sender: resolveAuthor(message.senderId) }));
+
+  res.json(messages);
+});
+
+app.post('/api/groups/:groupId/messages', authMiddleware, (req, res) => {
+  const { groupId } = req.params;
+  const { text } = req.body;
+
+  const message = {
+    id: createId('msg'),
+    groupId,
+    senderId: req.user.id,
+    text,
+    createdAt: new Date().toISOString()
+  };
+
+  state.messages.push(message);
+  saveState();
+  io.to(groupId).emit('chat:new-message', { ...message, sender: resolveAuthor(req.user.id) });
+  res.status(201).json(message);
+});
+
+app.get('/api/notifications', authMiddleware, (_req, res) => {
+  res.json(state.notifications);
+});
+
+app.get('/api/admin/overview', authMiddleware, (_req, res) => {
+  const currentUser = getUserById(req.user.id);
+  if (!currentUser || !['admin', 'moderator'].includes(currentUser.role)) {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+
+  return res.json({
+    overview: {
+      activeUsers: state.users.length,
+      issues: state.notifications.length,
+      transactions: state.products.length,
+      engagement: 87,
+      insights: ['More buyers joining from search referrals', 'Pricing debates are increasing in B2B groups', 'Video content sees the largest retention']
+    },
+    users: state.users,
+    alerts: state.notifications,
+    activity: state.activity
+  });
+});
+
+io.on('connection', (socket) => {
+  socket.on('join-group', (groupId) => {
+    socket.join(groupId);
+  });
+
+  socket.on('send-message', (payload) => {
+    const { groupId, text, senderId } = payload;
+    const message = {
+      id: createId('msg'),
+      groupId,
+      senderId,
+      text,
+      createdAt: new Date().toISOString()
+    };
+
+    state.messages.push(message);
+    saveState();
+    io.to(groupId).emit('chat:new-message', { ...message, sender: resolveAuthor(senderId) });
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`Business Social Hub running on http://localhost:${PORT}`);
+});
