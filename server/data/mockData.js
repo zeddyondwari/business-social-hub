@@ -1,184 +1,322 @@
-import { v4 as uuidv4 } from 'uuid';
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import jwt from 'jsonwebtoken';
+import { Server } from 'socket.io';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { mockState, createId } from './data/mockData.js';
 
-export const mockState = {
-  users: [
-    {
-      id: 'u1',
-      name: 'Aisha Bello',
-      role: 'admin',
-      email: 'admin@hub.local',
-      password: 'admin123',
-      followerCount: 1280,
-      followingCount: 420,
-      friends: ['u2', 'u3'],
-      bio: 'Scaling commerce communities with data-first operations.',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 'u2',
-      name: 'Marcus Lee',
-      role: 'moderator',
-      email: 'mod@hub.local',
-      password: 'mod123',
-      followerCount: 540,
-      followingCount: 210,
-      friends: ['u1', 'u4'],
-      bio: 'Community growth, moderation, and trust systems.',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 'u3',
-      name: 'Nia Sol',
-      role: 'member',
-      email: 'nia@hub.local',
-      password: 'nia123',
-      followerCount: 260,
-      followingCount: 150,
-      friends: ['u1', 'u5'],
-      bio: 'Trader and retail seller focused on supply chain trust.',
-      avatar: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 'u4',
-      name: 'Kofi Mensah',
-      role: 'member',
-      email: 'kofi@hub.local',
-      password: 'kofi123',
-      followerCount: 900,
-      followingCount: 180,
-      friends: ['u2', 'u5'],
-      bio: 'Connecting buyers with vetted product sources.',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80'
-    },
-    {
-      id: 'u5',
-      name: 'Sofia Hart',
-      role: 'member',
-      email: 'sofia@hub.local',
-      password: 'sofia123',
-      followerCount: 730,
-      followingCount: 260,
-      friends: ['u3', 'u4'],
-      bio: 'Digital supplier and buyer engagement specialist.',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80'
-    }
-  ],
-  posts: [
-    {
-      id: 'p1',
-      userId: 'u3',
-      content: 'Launching a new crop harvest deal with flexible payment terms. Interested buyers can message me directly.',
-      likes: 89,
-      comments: 12,
-      createdAt: new Date().toISOString(),
-      image: 'https://images.unsplash.com/photo-1518843875459-f738682238a6?auto=format&fit=crop&w=1200&q=80'
-    },
-    {
-      id: 'p2',
-      userId: 'u4',
-      content: 'B2B procurement update: verified vendor supply is rising. I am comparing cost, shipping, and settlement speed.',
-      likes: 154,
-      comments: 34,
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80'
-    },
-    {
-      id: 'p3',
-      userId: 'u5',
-      content: 'Private group discussion on market pricing for local manufacturing supply. Let us align on fair pricing before negotiation.',
-      likes: 63,
-      comments: 20,
-      createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-      image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80'
-    }
-  ],
-  products: [
-    {
-      id: 'prod1',
-      name: 'Premium Smart Sensor Kit',
-      sellerId: 'u3',
-      price: 2500,
-      status: 'open',
-      listingType: 'product',
-      description: 'A sensor bundle for office and production efficiency monitoring.',
-      tags: ['iot', 'b2b', 'hardware'],
-      image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80'
-    },
-    {
-      id: 'prod2',
-      name: 'Wholesale Packaging Set',
-      sellerId: 'u4',
-      price: 1800,
-      status: 'negotiation',
-      listingType: 'product',
-      description: 'Bulk packaging materials for export-ready sellers.',
-      tags: ['logistics', 'wholesale'],
-      image: 'https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&w=1000&q=80'
-    },
-    {
-      id: 'prod3',
-      name: 'Video Studio Starter Pack',
-      sellerId: 'u5',
-      price: 3200,
-      status: 'closed',
-      listingType: 'product',
-      description: 'Production kit for creators and business product demos.',
-      tags: ['content', 'video'],
-      image: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1000&q=80'
-    }
-  ],
-  groups: [
-    {
-      id: 'g1',
-      name: 'Export Negotiators',
-      isPrivate: false,
-      members: ['u1', 'u2', 'u3', 'u5'],
-      description: 'Open discussion room for price strategy and trade flow.'
-    },
-    {
-      id: 'g2',
-      name: 'Vendor Quality Circle',
-      isPrivate: true,
-      members: ['u1', 'u4'],
-      description: 'Private room for vendor quality checks and exception handling.'
-    }
-  ],
-  messages: [
-    {
-      id: 'm1',
-      groupId: 'g1',
-      senderId: 'u3',
-      text: 'We can negotiate a 7% rate adjustment if delivery is stabilized.',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'm2',
-      groupId: 'g1',
-      senderId: 'u1',
-      text: 'I agree. Let us capture the final quote in the shared board before launch.',
-      createdAt: new Date(Date.now() - 60000).toISOString()
-    }
-  ],
-  notifications: [
-    { id: 'n1', type: 'challenge', message: 'A pricing challenge was raised on Product #prod2.', read: false },
-    { id: 'n2', type: 'alert', message: 'Moderator review is required for one new report.', read: false },
-    { id: 'n3', type: 'system', message: '5 new users joined this week.', read: true }
-  ],
-  activity: [
-    { id: 'a1', label: 'New joins', value: 412 },
-    { id: 'a2', label: 'Live negotiations', value: 28 },
-    { id: 'a3', label: 'Flagged issues', value: 6 },
-    { id: 'a4', label: 'Video views', value: 18420 }
-  ]
+dotenv.config();
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+const PORT = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const DATA_PATH = path.join(process.cwd(), 'data', 'store.json');
+
+const ensureStore = () => {
+  const dir = path.dirname(DATA_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  if (!fs.existsSync(DATA_PATH)) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(mockState, null, 2));
+  }
+
+  try {
+    const raw = fs.readFileSync(DATA_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch (error) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(mockState, null, 2));
+    return JSON.parse(JSON.stringify(mockState));
+  }
 };
 
-export const createId = (prefix = 'item') => `${prefix}_${uuidv4()}`;
+let state = ensureStore();
+if (!state.settings) state.settings = {};
+if (!state.backups) state.backups = [];
 
-export const findUserByEmail = (email) => mockState.users.find((user) => user.email === email);
-
-export const findUserById = (id) => mockState.users.find((user) => user.id === id);
-
-export const resolveAuthor = (userId) => {
-  const user = findUserById(userId);
+const saveState = () => fs.writeFileSync(DATA_PATH, JSON.stringify(state, null, 2));
+const getUserByEmail = (email) => state.users.find((user) => user.email.toLowerCase() === String(email).toLowerCase());
+const getUserById = (id) => state.users.find((user) => user.id === id);
+const resolveAuthor = (userId) => {
+  const user = getUserById(userId);
   return user ? { id: user.id, name: user.name, avatar: user.avatar, role: user.role } : null;
 };
+
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '5mb' }));
+
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
+const makeToken = (user) => jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.post('/api/auth/signup', (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: 'Name, email and password are required.' });
+  }
+  if (getUserByEmail(email)) {
+    return res.status(409).json({ message: 'User already exists.' });
+  }
+
+  const newUser = {
+    id: createId('u'),
+    name,
+    role: 'member',
+    email,
+    password,
+    bio: 'New to the network.',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+    followerCount: 0,
+    followingCount: 0,
+    friends: [],
+    accountType: req.body.accountType || 'ordinary',
+    isPrivate: Boolean(req.body.isPrivate)
+  };
+
+  state.users.unshift(newUser);
+  saveState();
+
+  const token = makeToken(newUser);
+  return res.status(201).json({
+    token,
+    user: { id: newUser.id, name: newUser.name, role: newUser.role, email: newUser.email, avatar: newUser.avatar, bio: newUser.bio, followerCount: newUser.followerCount, followingCount: newUser.followingCount, connectedCount: newUser.friends.length }
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  const user = getUserByEmail(email);
+
+  if (!user || user.password !== password) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  const token = makeToken(user);
+  return res.json({
+    token,
+    user: { id: user.id, name: user.name, role: user.role, email: user.email, avatar: user.avatar, bio: user.bio, followerCount: user.followerCount, followingCount: user.followingCount, connectedCount: user.friends.length }
+  });
+});
+
+app.get('/api/profile', authMiddleware, (req, res) => {
+  const user = getUserById(req.user.id);
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  return res.json({
+    ...user,
+    totalPosts: state.posts.filter((post) => post.userId === user.id).length,
+    totalProducts: state.products.filter((product) => product.sellerId === user.id).length,
+    connectedCount: user.friends.length
+  });
+});
+
+app.get('/api/users', authMiddleware, (_req, res) => {
+  res.json(state.users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    avatar: user.avatar,
+    bio: user.bio,
+    followerCount: user.followerCount,
+    followingCount: user.followingCount,
+    friendCount: user.friends.length,
+    accountType: user.accountType || 'ordinary',
+    isPrivate: Boolean(user.isPrivate)
+  })));
+});
+
+app.get('/api/dashboard', authMiddleware, (_req, res) => {
+  const summary = {
+    totalUsers: state.users.length,
+    activeGroups: state.groups.length,
+    openDeals: state.products.filter((product) => product.status === 'open' || product.status === 'negotiation').length,
+    alerts: state.notifications.filter((item) => !item.read).length,
+    metrics: [
+      { label: 'New joins', value: '+18.2%' },
+      { label: 'Engagement', value: '76%' },
+      { label: 'Open deals', value: String(state.products.length) },
+      { label: 'Live traffic', value: '9.4k' }
+    ],
+    activity: state.activity
+  };
+  res.json(summary);
+});
+
+app.get('/api/feed', authMiddleware, (_req, res) => {
+  const feed = state.posts.map((post) => ({ ...post, author: resolveAuthor(post.userId) }));
+  res.json(feed);
+});
+
+app.post('/api/feed', authMiddleware, (req, res) => {
+  const { content, image } = req.body;
+  const post = {
+    id: createId('post'),
+    userId: req.user.id,
+    content,
+    image: image || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80',
+    likes: 0,
+    comments: 0,
+    createdAt: new Date().toISOString()
+  };
+
+  state.posts.unshift(post);
+  saveState();
+  io.emit('feed:update', { post: { ...post, author: resolveAuthor(req.user.id) } });
+  res.status(201).json(post);
+});
+
+app.get('/api/products', authMiddleware, (_req, res) => {
+  const products = state.products.map((product) => ({ ...product, seller: resolveAuthor(product.sellerId) }));
+  res.json(products);
+});
+
+app.post('/api/products', authMiddleware, (req, res) => {
+  const { name, description, price, image } = req.body;
+  if (!name || !description || !price) {
+    return res.status(400).json({ message: 'Name, description and price are required.' });
+  }
+
+  const product = {
+    id: createId('prod'),
+    name,
+    description,
+    price: Number(price),
+    image: image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1000&q=80',
+    status: 'open',
+    sellerId: req.user.id,
+    tags: ['new', 'social-trade']
+  };
+
+  state.products.unshift(product);
+  saveState();
+  io.emit('products:update', { product: { ...product, seller: resolveAuthor(req.user.id) } });
+  res.status(201).json(product);
+});
+
+app.post('/api/products/:id/negotiate', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const product = state.products.find((item) => item.id === id);
+  if (!product) {
+    return res.status(404).json({ message: 'Product not found' });
+  }
+
+  product.price = Number(req.body.price);
+  product.status = 'negotiation';
+  saveState();
+
+  const notification = {
+    id: createId('notif'),
+    type: 'challenge',
+    message: `Price negotiation submitted for ${product.name}.`,
+    read: false
+  };
+
+  state.notifications.unshift(notification);
+  saveState();
+  io.emit('notification:new', { notification });
+  return res.json(product);
+});
+
+app.get('/api/groups', authMiddleware, (_req, res) => {
+  res.json(state.groups);
+});
+
+app.get('/api/groups/:groupId/messages', authMiddleware, (req, res) => {
+  const messages = state.messages.filter((message) => message.groupId === req.params.groupId).map((message) => ({ ...message, sender: resolveAuthor(message.senderId) }));
+  res.json(messages);
+});
+
+app.post('/api/groups/:groupId/messages', authMiddleware, (req, res) => {
+  const { text, image } = req.body;
+  const message = {
+    id: createId('msg'),
+    groupId: req.params.groupId,
+    senderId: req.user.id,
+    text: text || '',
+    image: image || null,
+    createdAt: new Date().toISOString()
+  };
+
+  state.messages.push(message);
+  saveState();
+  io.to(req.params.groupId).emit('chat:new-message', { ...message, sender: resolveAuthor(req.user.id) });
+  res.status(201).json(message);
+});
+
+app.get('/api/notifications', authMiddleware, (_req, res) => {
+  res.json(state.notifications);
+});
+
+app.get('/api/settings', authMiddleware, (req, res) => {
+  const user = getUserById(req.user.id);
+  const settings = state.settings[req.user.id] || {
+    avatar: user?.avatar || '',
+    accountType: user?.accountType || 'ordinary',
+    isPrivate: Boolean(user?.isPrivate),
+    notifications: true,
+    backupMode: 'manual'
+  };
+  res.json(settings);
+});
+
+app.post('/api/settings', authMiddleware, (req, res) => {
+  const user = getUserById(req.user.id);
+  state.settings[req.user.id] = {
+    avatar: req.body.avatar || user?.avatar || '',
+    accountType: req.body.accountType || user?.accountType || 'ordinary',
+    isPrivate: Boolean(req.body.isPrivate),
+    notifications: Boolean(req.body.notifications),
+    backupMode: req.body.backupMode || 'manual'
+  };
+
+  if (user) {
+    user.avatar = state.settings[req.user.id].avatar;
+    user.accountType = state.settings[req.user.id].accountType;
+    user.isPrivate = state.settings[req.user.id].isPrivate;
+  }
+  saveState();
+  res.json({ user: { id: user.id, name: user.name, avatar: user.avatar, role: user.role, accountType: user.accountType, isPrivate: user.isPrivate } });
+});
+
+app.post('/api/backup', authMiddleware, (_req, res) => {
+  const timestamp = new Date().toISOString();
+  state.backups.unshift({ timestamp, snapshot: state });
+  saveState();
+  res.json({ timestamp, backups: state.backups.length });
+});
+
+io.on('connection', (socket) => {
+  socket.on('join-group', (groupId) => socket.join(groupId));
+});
+
+server.listen(PORT, () => {
+  console.log(`Business Social Hub running on http://localhost:${PORT}`);
+});
