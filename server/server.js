@@ -2,18 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import io from 'socket.io-client';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-const APP_NAME = 'Zeddy Etono';
+const APP_NAME = 'Zeddy Pal Singh';
 const socket = io(API);
 
 const demoUsers = [
-  { id: 'u1', name: 'Zeddy Etono', role: 'admin', email: 'admin@zeddy-etono.local', password: 'admin123', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80', accountType: 'business', isPrivate: false },
-  { id: 'u2', name: 'Maya Ford', role: 'moderator', email: 'mod@zeddy-etono.local', password: 'mod123', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80', accountType: 'customer', isPrivate: true },
-  { id: 'u3', name: 'Nia Sol', role: 'member', email: 'nia@zeddy-etono.local', password: 'nia123', avatar: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=300&q=80', accountType: 'ordinary', isPrivate: false }
+  { id: 'u1', name: 'Zeddy Pal Singh', role: 'admin', email: 'admin@zeddy-pal-singh.local', password: 'admin123', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80', accountType: 'business', isPrivate: false },
+  { id: 'u2', name: 'Maya Ford', role: 'moderator', email: 'mod@zeddy-pal-singh.local', password: 'mod123', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80', accountType: 'customer', isPrivate: true },
+  { id: 'u3', name: 'Nia Sol', role: 'member', email: 'nia@zeddy-pal-singh.local', password: 'nia123', avatar: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=300&q=80', accountType: 'ordinary', isPrivate: false }
 ];
 
 const demoFeed = [
   { id: 'p1', content: 'Launching a new premium import bundle for verified buyers. Message me for fast negotiation.', image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80', likes: 120, comments: 18, createdAt: new Date().toISOString(), author: demoUsers[0] },
-  { id: 'p2', content: 'Private business buyer network is active today. Let’s align on pricing before committing.', image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80', likes: 84, comments: 12, createdAt: new Date(Date.now() - 3600000).toISOString(), author: demoUsers[2] }
+  { id: 'p2', content: 'Private business buyer network is active today. Let\'s align on pricing before committing.', image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80', likes: 84, comments: 12, createdAt: new Date(Date.now() - 3600000).toISOString(), author: demoUsers[2] }
 ];
 
 const demoProducts = [
@@ -71,7 +71,7 @@ function App() {
   const [token, setToken] = useState('');
   const [user, setUser] = useState(demoUsers[0]);
   const [mode, setMode] = useState('login');
-  const [loginForm, setLoginForm] = useState({ email: 'admin@zeddy-etono.local', password: 'admin123' });
+  const [loginForm, setLoginForm] = useState({ email: 'admin@zeddy-pal-singh.local', password: 'admin123' });
   const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '', accountType: 'ordinary', isPrivate: false, avatar: '' });
   const [settingsForm, setSettingsForm] = useState(demoSettings);
   const [profile, setProfile] = useState({ ...demoUsers[0], bio: 'Business-first network member', followerCount: 1280, followingCount: 420, connectedCount: 6 });
@@ -395,9 +395,9 @@ function App() {
 
           <div className="demo-accounts">
             <span>Demo accounts:</span>
-            <small>admin@zeddy-etono.local / admin123</small>
-            <small>mod@zeddy-etono.local / mod123</small>
-            <small>nia@zeddy-etono.local / nia123</small>
+            <small>admin@zeddy-pal-singh.local / admin123</small>
+            <small>mod@zeddy-pal-singh.local / mod123</small>
+            <small>nia@zeddy-pal-singh.local / nia123</small>
           </div>
         </div>
       </div>
